@@ -2,6 +2,12 @@
 
 ![FrontEmu-Tools Logo](assets/logo.png)
 
+[![Version](https://img.shields.io/badge/version-1.0-brightgreen.svg)](https://github.com/Misael-art/FrontEmu-Tools/releases)
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![PySide6](https://img.shields.io/badge/PySide6-Qt6-green.svg)](https://pypi.org/project/PySide6/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-complete-brightgreen.svg)](docs/)
+
 ## 🎮 Visão Geral
 
 FrontEmu-Tools é uma evolução do SD Emulation GUI, focada em ser uma ferramenta frontend completa para gerenciamento de emulação. O projeto mantém os princípios da Clean Architecture enquanto expande significativamente as funcionalidades para oferecer uma experiência de emulação moderna e profissional.
@@ -28,6 +34,9 @@ FrontEmu-Tools é uma evolução do SD Emulation GUI, focada em ser uma ferramen
 ```
 FrontEmu-Tools/
 ├── docs/                          # Documentação completa
+│   ├── USER_GUIDE.md              # 📚 Guia Completo do Usuário
+│   ├── TECHNICAL_ARCHITECTURE.md  # 🏗️ Arquitetura Técnica
+│   ├── PRODUCT_REQUIREMENTS.md    # 📋 Requisitos do Produto (PRD)
 │   ├── DRS-FrontEmu-Tools.md      # Documento de Requisitos
 │   ├── Technical-Design-Document.md # Design Técnico
 │   ├── Visual-Identity-Specifications.md # Identidade Visual
@@ -44,7 +53,12 @@ FrontEmu-Tools/
 
 ## 📋 Documentação
 
-### 📖 Documentos Principais
+### 📖 Documentação Completa
+- **[📚 Guia Completo do Usuário](docs/USER_GUIDE.md)**: Guia pedagógico completo com propósito, benefícios, organização de pastas e convenções de nomenclatura
+- **[🏗️ Arquitetura Técnica](docs/TECHNICAL_ARCHITECTURE.md)**: Design arquitetural detalhado, tecnologias, APIs internas e padrões aplicados
+- **[📋 Requisitos do Produto (PRD)](docs/PRODUCT_REQUIREMENTS.md)**: Documento de requisitos do produto com funcionalidades, design de UI e critérios de aceitação
+
+### 📖 Documentos Técnicos Originais
 - **[DRS - Documento de Requisitos de Software](docs/DRS-FrontEmu-Tools.md)**: Requisitos funcionais e não-funcionais completos
 - **[Documento de Design Técnico](docs/Technical-Design-Document.md)**: Arquitetura detalhada e especificações técnicas
 - **[Especificações de Identidade Visual](docs/Visual-Identity-Specifications.md)**: Guia de design e identidade visual
@@ -55,6 +69,13 @@ FrontEmu-Tools/
 - **[Diagrama de Classes](docs/uml/Class-Diagram.md)**: Estrutura de classes seguindo Clean Architecture
 - **[Diagrama de Sequência](docs/uml/Sequence-Diagram.md)**: Fluxos de interação entre componentes
 - **[Diagrama de Componentes](docs/uml/Component-Diagram.md)**: Arquitetura de componentes e dependências
+
+### 🎨 Recursos Visuais da Documentação
+- **Diagramas Mermaid**: Fluxogramas interativos e diagramas de arquitetura
+- **Exemplos de Código**: Implementações práticas em Python
+- **Abordagem Pedagógica**: Linguagem clara e exemplos práticos
+- **Organização Visual**: Estrutura hierárquica com emojis e badges
+- **Casos de Uso Reais**: Cenários práticos de utilização
 
 ## 🎨 Identidade Visual
 
