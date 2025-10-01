@@ -1,0 +1,92 @@
+{
+  "version": "1.0.0",
+  "environment": "production",
+  "paths": {
+    "config_dir": "config",
+    "backup_dir": "backup",
+    "reports_dir": "reports",
+    "logs_dir": "logs"
+  },
+  "base_paths": {
+    "drive_root": "F:",
+    "emulation_root": "F:/Emulation",
+    "roms_root": "F:/Roms",
+    "emulators_root": "F:/Emulators",
+    "storage_media_root": "F:/Storage",
+    "media_root": "F:/Media",
+    "emulation_roms_root": "F:/EmulationRoms",
+    "frontends_root": "F:/Frontends"
+  },
+  "directory_names": {
+    "emulators_dir_name": "Emulators",
+    "frontends_dir_name": "Frontends",
+    "roms_dir_name": "Roms",
+    "emulation_dir_name": "Emulation",
+    "storage_dir_name": "storage",
+    "downloaded_media_name": "downloaded_media",
+    "media_dir_name": "media"
+  },
+  "config_files": {
+    "platform_list_file": "platform_mapping.json",
+    "emulator_mapping_file": "emulator_mapping.json",
+    "variant_mapping_file": "variant_mapping.json",
+    "frontend_config_file": "frontend_config.json"
+  },
+  "system_settings": {
+    "convert_to_snake_case": true,
+    "require_admin_privileges": true,
+    "enable_dry_run_by_default": false,
+    "log_level": "INFO"
+  },
+  "project": "SD Emulation GUI",
+  "status": "active",
+  "score": 85,
+  "metrics": {
+    "code": 80,
+    "docs": 75,
+    "gui": 90
+  },
+  "blockers": [],
+  "opportunities": [
+    "Otimização de performance",
+    "Melhoria da interface do usuário",
+    "Expansão de suporte a emuladores"
+  ],
+  "functionalities": {
+    "total": 15,
+    "implemented": 12,
+    "details": [
+      "Detecção de instalações legacy",
+      "Gerenciamento de drives",
+      "Interface gráfica responsiva",
+      "Sistema de validação de configuração",
+      "Monitoramento de performance",
+      "Sistema de backup automático",
+      "Resolução dinâmica de caminhos",
+      "Suporte multi-plataforma",
+      "Logging estruturado",
+      "Validação de cross-references",
+      "Cache inteligente",
+      "Sistema de métricas"
+    ]
+  },
+  "diagnostic": {
+    "document_discrepancies": "Nenhuma discrepância crítica identificada",
+    "CI": "Sistema de CI/CD ativo e funcional"
+  },
+  "actionPlan": [
+    {
+      "action": "Implementar otimizações de memória",
+      "impact": 8,
+      "feasibility": 7,
+      "deadline": "2024-01-15"
+    },
+    {
+      "action": "Corrigir encoding de logs",
+      "impact": 6,
+      "feasibility": 9,
+      "deadline": "2024-01-10"
+    }
+  ],
+  "finalObservations": "Sistema funcionando corretamente com alta estabilidade. Identificadas oportunidades de otimização de performance e melhorias na interface do usuário."
+}

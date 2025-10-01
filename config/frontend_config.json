@@ -1,0 +1,39 @@
+{
+  "theme": {
+    "name": "default",
+    "style": "modern",
+    "color_scheme": "dark"
+  },
+  "features": {
+    "auto_detection": true,
+    "media_scraping": true,
+    "controller_support": true,
+    "save_states": true,
+    "achievements": false,
+    "netplay": false
+  },
+  "EmulationStation-DE": {
+    "config_path": "F:/Emulation/Frontends/EmulationStation-DE/config",
+    "roms_path": "F:/Roms",
+    "media_path": "F:/Emulation/media",
+    "themes_path": "F:/Emulation/Frontends/EmulationStation-DE/themes",
+    "executable": "F:/Emulation/Frontends/EmulationStation-DE/EmulationStation.exe"
+  },
+  "RetroArch": {
+    "config_path": "F:/Emulation/Frontends/RetroArch/config",
+    "cores_path": "F:/Emulation/Frontends/RetroArch/cores",
+    "assets_path": "F:/Emulation/Frontends/RetroArch/assets",
+    "saves_path": "F:/Emulation/saves",
+    "executable": "F:/Emulation/Frontends/RetroArch/retroarch.exe"
+  },
+  "global_paths": {
+    "roms_base_path": "F:/Roms",
+    "media_base_path": "F:/Emulation/media",
+    "frontend_base_path": "F:/Emulation/Frontends",
+    "mapping_files": {
+      "platform_mapping": "F:/tools/sd-emulation-gui/meta/config/platform_mapping.json",
+      "emulator_mapping": "F:/tools/sd-emulation-gui/meta/config/emulator_mapping.json",
+      "variant_mapping": "F:/tools/sd-emulation-gui/meta/config/variant_mapping.json"
+    }
+  }
+}

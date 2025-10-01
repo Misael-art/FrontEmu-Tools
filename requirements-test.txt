@@ -1,0 +1,2 @@
+# FrontEmu-Tools - Testing Requirements
+# Install with: pip install

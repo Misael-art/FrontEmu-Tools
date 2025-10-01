@@ -1,0 +1,20 @@
+# FrontEmu-Tools - Development Requirements
+# Install with: pip install -r requirements-dev.txt
+
+# Include base requirements
+-r requirements.txt
+
+# Testing framework
+pytest>=8.4.2
+pytest-qt>=4.5.0
+pytest-cov>=7.0.0
+
+# Type checking
+mypy>=1.18.2
+
+# Code formatting and linting
+ruff>=0.13.2
+black>=25.9.0
+
+# Application packaging
+PyInstaller>=6.16.0

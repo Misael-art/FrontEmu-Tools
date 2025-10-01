@@ -1,0 +1,73 @@
+{
+    "emulators": {
+        "RetroArch": {
+            "systems": ["nintendo64", "gamecube", "playstation", "arcade"],
+            "paths": {
+                "executable": "emulators/retroarch/retroarch.exe",
+                "config": "emulators/retroarch/config",
+                "cores": "emulators/retroarch/cores",
+                "bios": null,
+                "saves": "emulators/retroarch/saves",
+                "roms": "emulators/retroarch/roms",
+                "shaders": "emulators/retroarch/shaders",
+                "hdpacks": "emulators/retroarch/hdpacks",
+                "recordings": "emulators/retroarch/recordings",
+                "screenshots": "emulators/retroarch/screenshots",
+                "storage": "emulators/retroarch/storage",
+                "downloaded_media": "emulators/retroarch/downloaded_media"
+            },
+            "components": ["retroarch", "core-info", "assets", "autoconfig", "cheats", "database", "overlays", "shaders"]
+        },
+        "Dolphin": {
+            "systems": ["gamecube", "wii"],
+            "paths": {
+                "executable": "emulators/dolphin/Dolphin.exe",
+                "config": "emulators/dolphin/config",
+                "cores": null,
+                "bios": null,
+                "saves": "emulators/dolphin/saves",
+                "roms": "emulators/dolphin/roms",
+                "shaders": null,
+                "hdpacks": null,
+                "recordings": null,
+                "screenshots": "emulators/dolphin/screenshots",
+                "storage": "emulators/dolphin/storage",
+                "downloaded_media": "emulators/dolphin/downloaded_media"
+            },
+            "components": ["dolphin", "dolphin-emu"]
+        },
+        "PCSX2": {
+            "systems": ["playstation2"],
+            "paths": {
+                "executable": "emulators/pcsx2/pcsx2.exe",
+                "config": "emulators/pcsx2/config",
+                "cores": null,
+                "bios": "emulators/pcsx2/bios",
+                "saves": "emulators/pcsx2/saves",
+                "roms": "emulators/pcsx2/roms",
+                "shaders": null,
+                "hdpacks": null,
+                "recordings": null,
+                "screenshots": "emulators/pcsx2/screenshots",
+                "storage": "emulators/pcsx2/storage",
+                "downloaded_media": "emulators/pcsx2/downloaded_media"
+            },
+            "components": ["pcsx2", "bios", "plugins"]
+        }
+    },
+    "frontends": {
+        "emulationstation": {
+            "config": "frontends/emulationstation/es_systems.cfg",
+            "paths": {
+                "roms": "frontends/emulationstation/roms",
+                "emulators": "frontends/emulationstation/emulators",
+                "media": "frontends/emulationstation/media",
+                "screenshots": "frontends/emulationstation/screenshots",
+                "saves": "frontends/emulationstation/saves",
+                "bios": "frontends/emulationstation/bios",
+                "emulator_path": "emulators",
+                "rom_path": "roms"
+            }
+        }
+    }
+}

@@ -1,0 +1,141 @@
+{
+  "variants": {
+    "Nintendo Entertainment System": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "prototype": "Prototype",
+      "homebrew": "Homebrew",
+      "hack": "ROM Hack",
+      "translation": "Translation"
+    },
+    "Super Nintendo Entertainment System": {
+      "usa": "USA",
+      "europe": "Europe", 
+      "japan": "Japan",
+      "world": "World",
+      "prototype": "Prototype",
+      "beta": "Beta",
+      "sample": "Sample",
+      "demo": "Demo"
+    },
+    "Nintendo 64": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "kiosk": "Kiosk Demo",
+      "prototype": "Prototype"
+    },
+    "Nintendo GameCube": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "demo": "Demo Disc",
+      "preview": "Preview"
+    },
+    "Nintendo Wii": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "korea": "Korea",
+      "world": "World",
+      "channel": "WiiWare/VC"
+    },
+    "Sega Genesis": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "prototype": "Prototype",
+      "unlicensed": "Unlicensed"
+    },
+    "Sega Master System": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "brazil": "Brazil",
+      "world": "World"
+    },
+    "Sega Saturn": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "demo": "Demo"
+    },
+    "Sega Dreamcast": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "demo": "Demo",
+      "prototype": "Prototype"
+    },
+    "Sony PlayStation": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "demo": "Demo",
+      "prototype": "Prototype"
+    },
+    "Sony PlayStation 2": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "demo": "Demo",
+      "prototype": "Prototype"
+    },
+    "Sony PlayStation Portable": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "demo": "Demo",
+      "minis": "PSP Minis"
+    },
+    "Game Boy": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "prototype": "Prototype"
+    },
+    "Game Boy Color": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "prototype": "Prototype"
+    },
+    "Game Boy Advance": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "world": "World",
+      "prototype": "Prototype",
+      "multiboot": "Multiboot"
+    },
+    "Nintendo DS": {
+      "usa": "USA",
+      "europe": "Europe",
+      "japan": "Japan",
+      "korea": "Korea",
+      "world": "World",
+      "demo": "Demo",
+      "dsiware": "DSiWare"
+    },
+    "Arcade": {
+      "world": "World",
+      "japan": "Japan",
+      "usa": "USA",
+      "bootleg": "Bootleg",
+      "prototype": "Prototype",
+      "homebrew": "Homebrew"
+    }
+  }
+}

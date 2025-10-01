@@ -1,0 +1,19 @@
+{
+  "base_drive": ".",
+  "base_path": ".",
+  "config_directory": "scripts/config",
+  "emulation_root": "Emulation",
+  "emulators_root": "Emulators",
+  "roms_root": "Roms",
+  "tools_root": "Tools",
+  "frontends_root": "Frontends",
+  "backup_root": "backups",
+  "logs_root": "logs",
+  "reports_root": "reports",
+  "temp_root": "temp",
+  "architecture_doc": "docs/architecture.md",
+  "variant_mapping_file": "meta/mappings/variant_mapping.json",
+  "emulator_mapping_file": "meta/mappings/emulator_mapping.json",
+  "platform_mapping_file": "meta/mappings/platform_mapping.json",
+  "environment": "windows"
+}
