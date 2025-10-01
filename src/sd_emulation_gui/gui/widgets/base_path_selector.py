@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import QTimer, Signal, pyqtSignal, Qt
+from PySide6.QtCore import QTimer, Signal, Qt
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 

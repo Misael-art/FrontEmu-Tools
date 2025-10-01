@@ -10,10 +10,60 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from cache.cache_manager import cache_manager
-from meta.config.path_config import PathConfigManager, get_path_config_manager
-from utils.file_utils import FileUtils
-from utils.path_utils import PathUtils
+# Implementações locais para substituir dependências externas
+class CacheManager:
+    """Gerenciador de cache local."""
+    
+    def __init__(self):
+        self._cache = {}
+    
+    def set(self, key: str, value: Any, cache_type: str = "memory", ttl: int = 300):
+        self._cache[key] = value
+    
+    def get(self, key: str, cache_type: str = "memory"):
+        return self._cache.get(key)
+    
+    def invalidate_pattern(self, pattern: str):
+        keys_to_remove = [k for k in self._cache.keys() if pattern in k]
+        for key in keys_to_remove:
+            del self._cache[key]
+
+cache_manager = CacheManager()
+
+class PathConfigManager:
+    """Gerenciador de configuração de caminhos local."""
+    
+    def get_base_path(self):
+        return Path.cwd()
+    
+    def get_config_root(self):
+        return Path.cwd() / "config"
+
+def get_path_config_manager():
+    return PathConfigManager()
+
+class FileUtils:
+    """Utilitários de arquivo locais."""
+    
+    @staticmethod
+    def write_text(path: Path, content: str):
+        path.write_text(content)
+    
+    @staticmethod
+    def delete_file(path: Path):
+        if path.exists():
+            path.unlink()
+
+class PathUtils:
+    """Utilitários de caminho locais."""
+    
+    @staticmethod
+    def normalize_path(path: str) -> str:
+        return str(Path(path).resolve())
+    
+    @staticmethod
+    def ensure_directory_exists(path: str, create_parents: bool = True):
+        Path(path).mkdir(parents=create_parents, exist_ok=True)
 
 
 class BaseService:

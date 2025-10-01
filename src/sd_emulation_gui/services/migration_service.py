@@ -37,16 +37,20 @@ except ImportError:
     def get_everyone_account():
         return "Everyone"
 
-# Import the new path configuration system
-import sys
-from pathlib import Path
+# Implementações locais para substituir meta.config
+class PathConfigManager:
+    """Gerenciador de configuração de caminhos local."""
+    
+    @staticmethod
+    def get_config():
+        return {}
 
-# Add meta/config to path
-meta_config_path = Path(__file__).parent.parent.parent / "meta" / "config"
-sys.path.insert(0, str(meta_config_path))
-
-from meta.config.path_config import PathConfigManager
-from meta.config.path_resolver import PathResolver
+class PathResolver:
+    """Resolvedor de caminhos local."""
+    
+    @staticmethod
+    def resolve(path: str) -> str:
+        return path
 
 # Add src to path for imports
 import sys

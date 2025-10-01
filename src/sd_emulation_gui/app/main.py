@@ -88,16 +88,21 @@ def run_gui_application(container: ApplicationContainer) -> int:
         from PySide6.QtWidgets import QApplication
 
         from gui.main_window import MainWindow
+        from infrastructure import get_container, configure_container
 
         with operation_context("gui_application", logger) as correlation_id:
             # Create Qt application
             app = QApplication(sys.argv)
-            app.setApplicationName("SD Emulation GUI")
-            app.setApplicationVersion("0.1.0")
-            app.setOrganizationName("SD Emulation Tools")
+            app.setApplicationName("FrontEmu-Tools")
+            app.setApplicationVersion("1.0.0")
+            app.setOrganizationName("FrontEmu-Tools")
 
-            # Create and show main window
-            main_window = MainWindow(container)
+            # Configure infrastructure container
+            configure_container()
+            infrastructure_container = get_container()
+
+            # Create and show main window with both containers
+            main_window = MainWindow(infrastructure_container)
             main_window.show()
 
             logger.info("GUI application started successfully")

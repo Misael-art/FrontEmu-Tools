@@ -1,723 +1,792 @@
 """
-System Statistics Service
+System Stats Service
 
-Serviço responsável pela coleta e monitoramento de estatísticas do sistema,
-incluindo métricas de performance, uso de recursos e monitoramento em tempo real.
+Serviço responsável pelo monitoramento de estatísticas e performance do sistema,
+seguindo os requisitos RF010 do DRS FrontEmu-Tools.
 """
 
-import asyncio
+import json
 import logging
+import psutil
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Callable
-from collections import deque
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-# Import centralized systems
-from sd_emulation_gui.app.imports_manager import configure_imports, import_with_fallback
-from sd_emulation_gui.app.factory import FallbackFactory
-
-# Configure imports centrally
-configure_imports()
-
-# Import with proper fallbacks
-PathConfigManager = import_with_fallback(
-    'path_config.PathConfigManager',
-    FallbackFactory.create_service_fallback
-)
-
-PathResolver = import_with_fallback(
-    'path_resolver.PathResolver',
-    FallbackFactory.create_service_fallback
-)
-
-# Import utilities with simple fallbacks
-try:
-    from sd_emulation_gui.utils.base_service import BaseService
-    from sd_emulation_gui.utils.system_utils import SystemUtils
-    from sd_emulation_gui.utils.drive_utils import DriveUtils
-    from sd_emulation_gui.utils.path_utils import PathUtils
-except ImportError as e:
-    logging.warning(f"Failed to import utilities: {e}")
-    
-    class BaseService:
-        def __init__(self):
-            self.logger = logging.getLogger(self.__class__.__name__)
-    
-    class SystemUtils:
-        @staticmethod
-        def get_system_info():
-            return {}
-        
-        @staticmethod
-        def get_performance_metrics():
-            return {}
-    
-    class DriveUtils:
-        @staticmethod
-        def get_all_drives():
-            return []
-    
-    class PathUtils:
-        @staticmethod
-        def normalize_path(path: str) -> str:
-            import os
-            return os.path.normpath(path)
+from sd_emulation_gui.utils.base_service import BaseService
 
 
 class SystemMetrics:
-    """Classe para armazenar métricas do sistema em um ponto no tempo."""
+    """Métricas do sistema em um ponto no tempo."""
     
-    def __init__(self, timestamp: datetime = None):
-        """Inicializa métricas do sistema.
+    def __init__(self):
+        """Inicializa métricas do sistema."""
+        self.timestamp = datetime.now()
         
-        Args:
-            timestamp: Timestamp das métricas (padrão: agora)
-        """
-        self.timestamp = timestamp or datetime.now()
-        self.cpu_usage = 0.0
-        self.memory_usage = 0.0
+        # CPU
+        self.cpu_percent = 0.0
+        self.cpu_count = 0
+        self.cpu_freq = 0.0
+        self.cpu_temp = 0.0
+        
+        # Memória
         self.memory_total = 0
+        self.memory_used = 0
+        self.memory_percent = 0.0
         self.memory_available = 0
-        self.disk_usage = {}  # Por drive
-        self.network_io = {'bytes_sent': 0, 'bytes_recv': 0}
-        self.process_count = 0
-        self.uptime_seconds = 0
         
+        # Disco
+        self.disk_total = 0
+        self.disk_used = 0
+        self.disk_percent = 0.0
+        self.disk_free = 0
+        self.disk_read_speed = 0.0
+        self.disk_write_speed = 0.0
+        
+        # Rede
+        self.network_sent = 0
+        self.network_recv = 0
+        self.network_sent_speed = 0.0
+        self.network_recv_speed = 0.0
+        
+        # GPU (se disponível)
+        self.gpu_percent = 0.0
+        self.gpu_memory_used = 0
+        self.gpu_memory_total = 0
+        self.gpu_temp = 0.0
+        
+        # Processos
+        self.process_count = 0
+        self.emulator_processes = []
+    
     def to_dict(self) -> Dict[str, Any]:
         """Converte métricas para dicionário."""
         return {
             'timestamp': self.timestamp.isoformat(),
-            'cpu_usage': round(self.cpu_usage, 2),
-            'memory_usage': round(self.memory_usage, 2),
-            'memory_total': self.memory_total,
-            'memory_available': self.memory_available,
-            'memory_total_gb': round(self.memory_total / (1024**3), 2),
-            'memory_available_gb': round(self.memory_available / (1024**3), 2),
-            'disk_usage': self.disk_usage,
-            'network_io': self.network_io,
-            'process_count': self.process_count,
-            'uptime_seconds': self.uptime_seconds,
-            'uptime_formatted': self._format_uptime(self.uptime_seconds)
+            'cpu': {
+                'percent': self.cpu_percent,
+                'count': self.cpu_count,
+                'freq': self.cpu_freq,
+                'temp': self.cpu_temp
+            },
+            'memory': {
+                'total': self.memory_total,
+                'used': self.memory_used,
+                'percent': self.memory_percent,
+                'available': self.memory_available
+            },
+            'disk': {
+                'total': self.disk_total,
+                'used': self.disk_used,
+                'percent': self.disk_percent,
+                'free': self.disk_free,
+                'read_speed': self.disk_read_speed,
+                'write_speed': self.disk_write_speed
+            },
+            'network': {
+                'sent': self.network_sent,
+                'recv': self.network_recv,
+                'sent_speed': self.network_sent_speed,
+                'recv_speed': self.network_recv_speed
+            },
+            'gpu': {
+                'percent': self.gpu_percent,
+                'memory_used': self.gpu_memory_used,
+                'memory_total': self.gpu_memory_total,
+                'temp': self.gpu_temp
+            },
+            'processes': {
+                'count': self.process_count,
+                'emulator_processes': self.emulator_processes
+            }
         }
     
-    def _format_uptime(self, seconds: int) -> str:
-        """Formata tempo de atividade em formato legível."""
-        try:
-            days = seconds // 86400
-            hours = (seconds % 86400) // 3600
-            minutes = (seconds % 3600) // 60
-            
-            if days > 0:
-                return f"{days}d {hours}h {minutes}m"
-            elif hours > 0:
-                return f"{hours}h {minutes}m"
-            else:
-                return f"{minutes}m"
-        except Exception:
-            return "unknown"
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SystemMetrics':
+        """Cria métricas a partir de dicionário."""
+        metrics = cls()
+        
+        if 'timestamp' in data:
+            metrics.timestamp = datetime.fromisoformat(data['timestamp'])
+        
+        # CPU
+        cpu_data = data.get('cpu', {})
+        metrics.cpu_percent = cpu_data.get('percent', 0.0)
+        metrics.cpu_count = cpu_data.get('count', 0)
+        metrics.cpu_freq = cpu_data.get('freq', 0.0)
+        metrics.cpu_temp = cpu_data.get('temp', 0.0)
+        
+        # Memória
+        memory_data = data.get('memory', {})
+        metrics.memory_total = memory_data.get('total', 0)
+        metrics.memory_used = memory_data.get('used', 0)
+        metrics.memory_percent = memory_data.get('percent', 0.0)
+        metrics.memory_available = memory_data.get('available', 0)
+        
+        # Disco
+        disk_data = data.get('disk', {})
+        metrics.disk_total = disk_data.get('total', 0)
+        metrics.disk_used = disk_data.get('used', 0)
+        metrics.disk_percent = disk_data.get('percent', 0.0)
+        metrics.disk_free = disk_data.get('free', 0)
+        metrics.disk_read_speed = disk_data.get('read_speed', 0.0)
+        metrics.disk_write_speed = disk_data.get('write_speed', 0.0)
+        
+        # Rede
+        network_data = data.get('network', {})
+        metrics.network_sent = network_data.get('sent', 0)
+        metrics.network_recv = network_data.get('recv', 0)
+        metrics.network_sent_speed = network_data.get('sent_speed', 0.0)
+        metrics.network_recv_speed = network_data.get('recv_speed', 0.0)
+        
+        # GPU
+        gpu_data = data.get('gpu', {})
+        metrics.gpu_percent = gpu_data.get('percent', 0.0)
+        metrics.gpu_memory_used = gpu_data.get('memory_used', 0)
+        metrics.gpu_memory_total = gpu_data.get('memory_total', 0)
+        metrics.gpu_temp = gpu_data.get('temp', 0.0)
+        
+        # Processos
+        processes_data = data.get('processes', {})
+        metrics.process_count = processes_data.get('count', 0)
+        metrics.emulator_processes = processes_data.get('emulator_processes', [])
+        
+        return metrics
+
+
+class PerformanceAlert:
+    """Alerta de performance do sistema."""
+    
+    def __init__(self, alert_type: str, message: str, severity: str = "warning",
+                 threshold: float = 0.0, current_value: float = 0.0):
+        """Inicializa alerta de performance.
+        
+        Args:
+            alert_type: Tipo do alerta (cpu, memory, disk, etc.)
+            message: Mensagem do alerta
+            severity: Severidade (info, warning, critical)
+            threshold: Valor limite que disparou o alerta
+            current_value: Valor atual que causou o alerta
+        """
+        self.alert_type = alert_type
+        self.message = message
+        self.severity = severity
+        self.threshold = threshold
+        self.current_value = current_value
+        self.timestamp = datetime.now()
+        self.acknowledged = False
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Converte alerta para dicionário."""
+        return {
+            'alert_type': self.alert_type,
+            'message': self.message,
+            'severity': self.severity,
+            'threshold': self.threshold,
+            'current_value': self.current_value,
+            'timestamp': self.timestamp.isoformat(),
+            'acknowledged': self.acknowledged
+        }
 
 
 class SystemStatsService(BaseService):
-    """Serviço para coleta e monitoramento de estatísticas do sistema."""
+    """Serviço para monitoramento de estatísticas e performance do sistema."""
     
-    def __init__(self, base_path: str = None):
+    def __init__(self, monitoring_interval: float = 5.0, base_path: Optional[str] = None):
         """Inicializa o serviço de estatísticas do sistema.
         
         Args:
-            base_path: Caminho base para configurações (opcional)
+            monitoring_interval: Intervalo de monitoramento em segundos
+            base_path: Caminho base para armazenamento de dados (opcional)
         """
-        super().__init__()
+        # Configurações
+        self.monitoring_interval = monitoring_interval
+        self.max_history_size = 1000
+        self.enable_gpu_monitoring = True
         
-        # Initialize path management
-        self.path_config_manager = PathConfigManager()
-        self.path_resolver = PathResolver()
-        
-        if base_path:
-            self.base_path = PathUtils.normalize_path(base_path)
-        else:
-            # Use dynamic path resolution
-            try:
-                resolved_path = self.path_resolver.resolve_path("config_base_path").resolved_path
-                self.base_path = PathUtils.normalize_path(resolved_path)
-            except Exception:
-                self.base_path = "."
-        
-        # Configurações de monitoramento
-        self.monitoring_enabled = False
-        self.monitoring_interval = 5  # Segundos entre coletas
-        self.history_size = 720  # Manter 1 hora de histórico (720 * 5s = 3600s)
+        # Estado do monitoramento
+        self._monitoring_active = False
+        self._monitoring_thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
         
         # Histórico de métricas
-        self.metrics_history = deque(maxlen=self.history_size)
-        self.current_metrics = None
+        self._metrics_history: List[SystemMetrics] = []
+        self._metrics_lock = threading.Lock()
         
-        # Threading para monitoramento
-        self._monitoring_thread = None
-        self._stop_monitoring = threading.Event()
+        # Alertas
+        self._alerts: List[PerformanceAlert] = []
+        self._alert_callbacks: List[Callable[[PerformanceAlert], None]] = []
         
-        # Callbacks para alertas
-        self._alert_callbacks = []
+        # Limites de alerta (percentuais)
+        self.cpu_warning_threshold = 80.0
+        self.cpu_critical_threshold = 95.0
+        self.memory_warning_threshold = 85.0
+        self.memory_critical_threshold = 95.0
+        self.disk_warning_threshold = 85.0
+        self.disk_critical_threshold = 95.0
+        self.temp_warning_threshold = 75.0
+        self.temp_critical_threshold = 85.0
         
-        # Thresholds para alertas
-        self.cpu_alert_threshold = 80.0  # CPU > 80%
-        self.memory_alert_threshold = 85.0  # Memória > 85%
-        self.disk_alert_threshold = 90.0  # Disco > 90%
+        # Cache para cálculo de velocidades
+        self._last_disk_io = None
+        self._last_network_io = None
+        self._last_measurement_time = None
         
-        # Cache para informações do sistema
-        self._system_info_cache = None
-        self._cache_timestamp = None
-        self._cache_duration = 300  # 5 minutos
+        # Lista de processos de emuladores conhecidos
+        self.emulator_processes = [
+            'retroarch', 'pcsx2', 'dolphin', 'cemu', 'yuzu', 'ryujinx',
+            'ppsspp', 'desmume', 'melonds', 'mgba', 'snes9x', 'zsnes',
+            'epsxe', 'project64', 'mupen64plus', 'citra', 'xenia'
+        ]
+        
+        super().__init__()
     
     def initialize(self) -> None:
-        """Inicializa o SystemStatsService."""
+        """Inicializa o serviço de estatísticas."""
         try:
             self.logger.info("Inicializando SystemStatsService...")
             
-            # Garantir que os atributos existam
-            if not hasattr(self, 'metrics_history'):
-                self.metrics_history = deque(maxlen=720)
-            if not hasattr(self, 'current_metrics'):
-                self.current_metrics = None
-            if not hasattr(self, '_alert_callbacks'):
-                self._alert_callbacks = []
-            if not hasattr(self, '_system_info_cache'):
-                self._system_info_cache = None
-            if not hasattr(self, '_cache_timestamp'):
-                self._cache_timestamp = None
+            # Verificar disponibilidade do psutil
+            if not self._check_psutil_availability():
+                raise RuntimeError("psutil não está disponível")
             
-            # Coletar métricas iniciais (sem falhar se houver erro)
-            try:
-                self.current_metrics = self._collect_current_metrics()
-                
-                # Adicionar ao histórico
-                if self.current_metrics:
-                    self.metrics_history.append(self.current_metrics)
-            except Exception as metrics_error:
-                self.logger.warning(f"Erro ao coletar métricas iniciais: {metrics_error}")
+            # Coletar métricas iniciais
+            initial_metrics = self._collect_metrics()
+            if initial_metrics:
+                with self._metrics_lock:
+                    self._metrics_history.append(initial_metrics)
             
-            self.logger.info("SystemStatsService inicializado com sucesso")
+            self.logger.info("SystemStatsService inicializado")
             
         except Exception as e:
             self.logger.error(f"Erro ao inicializar SystemStatsService: {e}")
-            # Não fazer raise para permitir que o container continue funcionando
-            # Definir valores padrão em caso de erro
-            if not hasattr(self, 'metrics_history'):
-                self.metrics_history = deque(maxlen=720)
-            if not hasattr(self, 'current_metrics'):
-                self.current_metrics = None
-            if not hasattr(self, '_alert_callbacks'):
-                self._alert_callbacks = []
-            if not hasattr(self, '_system_info_cache'):
-                self._system_info_cache = None
-            if not hasattr(self, '_cache_timestamp'):
-                self._cache_timestamp = None
+            raise
     
-    def _is_cache_valid(self) -> bool:
-        """Verifica se o cache de informações do sistema é válido."""
-        if not self._cache_timestamp:
-            return False
+    def start_monitoring(self) -> bool:
+        """Inicia o monitoramento contínuo do sistema.
         
-        elapsed = (datetime.now() - self._cache_timestamp).total_seconds()
-        return elapsed < self._cache_duration
-    
-    def _collect_current_metrics(self) -> SystemMetrics:
-        """Coleta métricas atuais do sistema."""
-        try:
-            metrics = SystemMetrics()
-            
-            # Obter métricas de performance
-            performance_data = SystemUtils.get_system_performance()
-            
-            # CPU
-            metrics.cpu_usage = performance_data.get('cpu_percent', 0.0)
-            
-            # Memória
-            memory_data = performance_data.get('memory', {})
-            metrics.memory_total = memory_data.get('total', 0)
-            metrics.memory_available = memory_data.get('available', 0)
-            if metrics.memory_total > 0:
-                used_memory = metrics.memory_total - metrics.memory_available
-                metrics.memory_usage = (used_memory / metrics.memory_total) * 100
-            
-            # Disco
-            disk_data = performance_data.get('disk_usage', {})
-            for drive, usage_info in disk_data.items():
-                if isinstance(usage_info, dict):
-                    metrics.disk_usage[drive] = {
-                        'usage_percent': usage_info.get('usage_percent', 0),
-                        'free_gb': round(usage_info.get('free', 0) / (1024**3), 2),
-                        'total_gb': round(usage_info.get('total', 0) / (1024**3), 2)
-                    }
-            
-            # Rede
-            network_data = performance_data.get('network_io', {})
-            metrics.network_io = {
-                'bytes_sent': network_data.get('bytes_sent', 0),
-                'bytes_recv': network_data.get('bytes_recv', 0)
-            }
-            
-            # Processos
-            metrics.process_count = performance_data.get('process_count', 0)
-            
-            # Uptime
-            metrics.uptime_seconds = performance_data.get('uptime_seconds', 0)
-            
-            return metrics
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao coletar métricas do sistema: {e}")
-            return SystemMetrics()  # Retorna métricas vazias em caso de erro
-    
-    def get_current_metrics(self, force_refresh: bool = False) -> Dict[str, Any]:
-        """Obtém métricas atuais do sistema.
-        
-        Args:
-            force_refresh: Força coleta de novas métricas
-            
         Returns:
-            Dicionário com métricas atuais
+            True se iniciou com sucesso
         """
         try:
-            if force_refresh or not self.current_metrics:
-                self.current_metrics = self._collect_current_metrics()
-                
-                # Adicionar ao histórico se não estiver monitorando
-                if not self.monitoring_enabled:
-                    self.metrics_history.append(self.current_metrics)
-            
-            return self.current_metrics.to_dict() if self.current_metrics else {}
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao obter métricas atuais: {e}")
-            return {}
-    
-    def get_system_info(self, force_refresh: bool = False) -> Dict[str, Any]:
-        """Obtém informações gerais do sistema.
-        
-        Args:
-            force_refresh: Força atualização do cache
-            
-        Returns:
-            Dicionário com informações do sistema
-        """
-        try:
-            if force_refresh or not self._is_cache_valid():
-                self._system_info_cache = SystemUtils.get_system_info()
-                self._cache_timestamp = datetime.now()
-            
-            return self._system_info_cache.copy() if self._system_info_cache else {}
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao obter informações do sistema: {e}")
-            return {}
-    
-    def get_metrics_history(self, minutes: int = 60) -> List[Dict[str, Any]]:
-        """Obtém histórico de métricas.
-        
-        Args:
-            minutes: Número de minutos de histórico para retornar
-            
-        Returns:
-            Lista com histórico de métricas
-        """
-        try:
-            # Calcular quantos pontos de dados representam o período solicitado
-            points_needed = (minutes * 60) // self.monitoring_interval
-            
-            # Obter últimos pontos do histórico
-            recent_metrics = list(self.metrics_history)[-points_needed:] if points_needed > 0 else list(self.metrics_history)
-            
-            return [metrics.to_dict() for metrics in recent_metrics]
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao obter histórico de métricas: {e}")
-            return []
-    
-    def get_performance_summary(self, minutes: int = 60) -> Dict[str, Any]:
-        """Obtém resumo de performance do período especificado.
-        
-        Args:
-            minutes: Período em minutos para análise
-            
-        Returns:
-            Dicionário com resumo de performance
-        """
-        try:
-            history = self.get_metrics_history(minutes)
-            
-            if not history:
-                return {}
-            
-            # Calcular estatísticas
-            cpu_values = [m['cpu_usage'] for m in history if 'cpu_usage' in m]
-            memory_values = [m['memory_usage'] for m in history if 'memory_usage' in m]
-            
-            summary = {
-                'period_minutes': minutes,
-                'data_points': len(history),
-                'timestamp_start': history[0]['timestamp'] if history else None,
-                'timestamp_end': history[-1]['timestamp'] if history else None,
-                'cpu': self._calculate_stats(cpu_values),
-                'memory': self._calculate_stats(memory_values),
-                'disk_usage': {},
-                'alerts_triggered': self._count_alerts_in_period(history)
-            }
-            
-            # Calcular estatísticas de disco por drive
-            if history:
-                # Obter todos os drives presentes no histórico
-                all_drives = set()
-                for metrics in history:
-                    if 'disk_usage' in metrics:
-                        all_drives.update(metrics['disk_usage'].keys())
-                
-                # Calcular estatísticas para cada drive
-                for drive in all_drives:
-                    drive_values = []
-                    for metrics in history:
-                        disk_data = metrics.get('disk_usage', {})
-                        if drive in disk_data:
-                            drive_values.append(disk_data[drive].get('usage_percent', 0))
-                    
-                    if drive_values:
-                        summary['disk_usage'][drive] = self._calculate_stats(drive_values)
-            
-            return summary
-            
-        except Exception as e:
-            self.logger.error(f"Erro ao calcular resumo de performance: {e}")
-            return {}
-    
-    def _calculate_stats(self, values: List[float]) -> Dict[str, float]:
-        """Calcula estatísticas básicas para uma lista de valores."""
-        if not values:
-            return {'min': 0, 'max': 0, 'avg': 0, 'current': 0}
-        
-        return {
-            'min': round(min(values), 2),
-            'max': round(max(values), 2),
-            'avg': round(sum(values) / len(values), 2),
-            'current': round(values[-1], 2)
-        }
-    
-    def _count_alerts_in_period(self, history: List[Dict[str, Any]]) -> Dict[str, int]:
-        """Conta alertas disparados no período."""
-        alerts = {'cpu': 0, 'memory': 0, 'disk': 0}
-        
-        for metrics in history:
-            # CPU alerts
-            if metrics.get('cpu_usage', 0) > self.cpu_alert_threshold:
-                alerts['cpu'] += 1
-            
-            # Memory alerts
-            if metrics.get('memory_usage', 0) > self.memory_alert_threshold:
-                alerts['memory'] += 1
-            
-            # Disk alerts
-            disk_usage = metrics.get('disk_usage', {})
-            for drive, usage_info in disk_usage.items():
-                if isinstance(usage_info, dict) and usage_info.get('usage_percent', 0) > self.disk_alert_threshold:
-                    alerts['disk'] += 1
-                    break  # Contar apenas uma vez por coleta
-        
-        return alerts
-    
-    def start_monitoring(self, interval_seconds: int = None) -> None:
-        """Inicia monitoramento contínuo do sistema.
-        
-        Args:
-            interval_seconds: Intervalo entre coletas (padrão: 5 segundos)
-        """
-        try:
-            if self.monitoring_enabled:
+            if self._monitoring_active:
                 self.logger.warning("Monitoramento já está ativo")
-                return
+                return True
             
-            if interval_seconds:
-                self.monitoring_interval = interval_seconds
-            
-            self.monitoring_enabled = True
-            self._stop_monitoring.clear()
-            
-            # Iniciar thread de monitoramento
+            self._stop_event.clear()
             self._monitoring_thread = threading.Thread(
                 target=self._monitoring_loop,
                 daemon=True,
                 name="SystemStatsMonitoring"
             )
-            self._monitoring_thread.start()
             
-            self.logger.info(f"Monitoramento iniciado (intervalo: {self.monitoring_interval}s)")
+            self._monitoring_thread.start()
+            self._monitoring_active = True
+            
+            self.logger.info("Monitoramento de sistema iniciado")
+            return True
             
         except Exception as e:
             self.logger.error(f"Erro ao iniciar monitoramento: {e}")
-            self.monitoring_enabled = False
+            return False
     
-    def stop_monitoring(self) -> None:
-        """Para o monitoramento contínuo do sistema."""
+    def stop_monitoring(self) -> bool:
+        """Para o monitoramento contínuo do sistema.
+        
+        Returns:
+            True se parou com sucesso
+        """
         try:
-            if not self.monitoring_enabled:
+            if not self._monitoring_active:
                 self.logger.warning("Monitoramento não está ativo")
-                return
+                return True
             
-            self.monitoring_enabled = False
-            self._stop_monitoring.set()
+            self._stop_event.set()
             
-            # Aguardar thread terminar
             if self._monitoring_thread and self._monitoring_thread.is_alive():
-                self._monitoring_thread.join(timeout=10)
+                self._monitoring_thread.join(timeout=10.0)
             
-            self.logger.info("Monitoramento parado")
+            self._monitoring_active = False
+            self.logger.info("Monitoramento de sistema parado")
+            return True
             
         except Exception as e:
             self.logger.error(f"Erro ao parar monitoramento: {e}")
+            return False
     
-    def _monitoring_loop(self) -> None:
-        """Loop principal de monitoramento."""
-        try:
-            self.logger.debug("Loop de monitoramento iniciado")
-            
-            while not self._stop_monitoring.is_set():
-                try:
-                    # Coletar métricas
-                    metrics = self._collect_current_metrics()
-                    self.current_metrics = metrics
-                    
-                    # Adicionar ao histórico
-                    self.metrics_history.append(metrics)
-                    
-                    # Verificar alertas
-                    self._check_alerts(metrics)
-                    
-                    # Aguardar próximo ciclo
-                    if self._stop_monitoring.wait(self.monitoring_interval):
-                        break  # Stop event foi setado
-                        
-                except Exception as e:
-                    self.logger.error(f"Erro no loop de monitoramento: {e}")
-                    time.sleep(self.monitoring_interval)
-            
-            self.logger.debug("Loop de monitoramento finalizado")
-            
-        except Exception as e:
-            self.logger.error(f"Erro fatal no loop de monitoramento: {e}")
-        finally:
-            self.monitoring_enabled = False
-    
-    def _check_alerts(self, metrics: SystemMetrics) -> None:
-        """Verifica se algum threshold foi ultrapassado e dispara alertas."""
-        try:
-            alerts = []
-            
-            # CPU alert
-            if metrics.cpu_usage > self.cpu_alert_threshold:
-                alerts.append({
-                    'type': 'cpu',
-                    'severity': 'warning' if metrics.cpu_usage < 95 else 'critical',
-                    'message': f'Alto uso de CPU: {metrics.cpu_usage:.1f}%',
-                    'value': metrics.cpu_usage,
-                    'threshold': self.cpu_alert_threshold
-                })
-            
-            # Memory alert
-            if metrics.memory_usage > self.memory_alert_threshold:
-                alerts.append({
-                    'type': 'memory',
-                    'severity': 'warning' if metrics.memory_usage < 95 else 'critical',
-                    'message': f'Alto uso de memória: {metrics.memory_usage:.1f}%',
-                    'value': metrics.memory_usage,
-                    'threshold': self.memory_alert_threshold
-                })
-            
-            # Disk alerts
-            for drive, usage_info in metrics.disk_usage.items():
-                if isinstance(usage_info, dict):
-                    usage_percent = usage_info.get('usage_percent', 0)
-                    if usage_percent > self.disk_alert_threshold:
-                        alerts.append({
-                            'type': 'disk',
-                            'severity': 'warning' if usage_percent < 98 else 'critical',
-                            'message': f'Alto uso do disco {drive}: {usage_percent:.1f}%',
-                            'value': usage_percent,
-                            'threshold': self.disk_alert_threshold,
-                            'drive': drive
-                        })
-            
-            # Disparar callbacks de alerta
-            if alerts:
-                for callback in self._alert_callbacks:
-                    try:
-                        callback(alerts)
-                    except Exception as e:
-                        self.logger.error(f"Erro ao executar callback de alerta: {e}")
-                        
-        except Exception as e:
-            self.logger.error(f"Erro ao verificar alertas: {e}")
-    
-    def add_alert_callback(self, callback: Callable[[List[Dict[str, Any]]], None]) -> None:
-        """Adiciona callback para receber alertas.
-        
-        Args:
-            callback: Função que será chamada quando alertas forem disparados
-        """
-        if callback not in self._alert_callbacks:
-            self._alert_callbacks.append(callback)
-            self.logger.debug("Callback de alerta adicionado")
-    
-    def remove_alert_callback(self, callback: Callable[[List[Dict[str, Any]]], None]) -> None:
-        """Remove callback de alertas.
-        
-        Args:
-            callback: Função a ser removida
-        """
-        if callback in self._alert_callbacks:
-            self._alert_callbacks.remove(callback)
-            self.logger.debug("Callback de alerta removido")
-    
-    def set_alert_thresholds(self, cpu_threshold: float = None, 
-                           memory_threshold: float = None, 
-                           disk_threshold: float = None) -> None:
-        """Define thresholds para alertas.
-        
-        Args:
-            cpu_threshold: Threshold para CPU (%)
-            memory_threshold: Threshold para memória (%)
-            disk_threshold: Threshold para disco (%)
-        """
-        if cpu_threshold is not None:
-            self.cpu_alert_threshold = cpu_threshold
-        
-        if memory_threshold is not None:
-            self.memory_alert_threshold = memory_threshold
-        
-        if disk_threshold is not None:
-            self.disk_alert_threshold = disk_threshold
-        
-        self.logger.info(f"Thresholds atualizados - CPU: {self.cpu_alert_threshold}%, "
-                        f"Memória: {self.memory_alert_threshold}%, "
-                        f"Disco: {self.disk_alert_threshold}%")
-    
-    def get_health_status(self) -> Dict[str, Any]:
-        """Obtém status geral de saúde do sistema.
+    def get_current_metrics(self) -> Optional[SystemMetrics]:
+        """Obtém métricas atuais do sistema.
         
         Returns:
-            Dicionário com status de saúde
+            Métricas atuais ou None se erro
+        """
+        return self._collect_metrics()
+    
+    def get_metrics_history(self, hours: int = 1) -> List[SystemMetrics]:
+        """Obtém histórico de métricas.
+        
+        Args:
+            hours: Número de horas de histórico
+            
+        Returns:
+            Lista de métricas no período
+        """
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        
+        with self._metrics_lock:
+            return [m for m in self._metrics_history if m.timestamp >= cutoff_time]
+    
+    def get_performance_summary(self, hours: int = 1) -> Dict[str, Any]:
+        """Obtém resumo de performance do sistema.
+        
+        Args:
+            hours: Período para análise em horas
+            
+        Returns:
+            Dicionário com resumo de performance
         """
         try:
-            current = self.get_current_metrics()
+            metrics_list = self.get_metrics_history(hours)
             
-            if not current:
-                return {'status': 'unknown', 'message': 'Não foi possível obter métricas'}
+            if not metrics_list:
+                return {}
             
-            # Determinar status geral
-            issues = []
-            warnings = []
+            # Calcular estatísticas
+            cpu_values = [m.cpu_percent for m in metrics_list]
+            memory_values = [m.memory_percent for m in metrics_list]
+            disk_values = [m.disk_percent for m in metrics_list]
             
-            # Verificar CPU
-            cpu_usage = current.get('cpu_usage', 0)
-            if cpu_usage > 95:
-                issues.append(f'CPU crítica: {cpu_usage:.1f}%')
-            elif cpu_usage > self.cpu_alert_threshold:
-                warnings.append(f'CPU alta: {cpu_usage:.1f}%')
-            
-            # Verificar memória
-            memory_usage = current.get('memory_usage', 0)
-            if memory_usage > 95:
-                issues.append(f'Memória crítica: {memory_usage:.1f}%')
-            elif memory_usage > self.memory_alert_threshold:
-                warnings.append(f'Memória alta: {memory_usage:.1f}%')
-            
-            # Verificar discos
-            disk_usage = current.get('disk_usage', {})
-            for drive, usage_info in disk_usage.items():
-                if isinstance(usage_info, dict):
-                    usage_percent = usage_info.get('usage_percent', 0)
-                    if usage_percent > 98:
-                        issues.append(f'Disco {drive} crítico: {usage_percent:.1f}%')
-                    elif usage_percent > self.disk_alert_threshold:
-                        warnings.append(f'Disco {drive} alto: {usage_percent:.1f}%')
-            
-            # Determinar status final
-            if issues:
-                status = 'critical'
-                message = f'{len(issues)} problema(s) crítico(s) detectado(s)'
-            elif warnings:
-                status = 'warning'
-                message = f'{len(warnings)} aviso(s) detectado(s)'
-            else:
-                status = 'healthy'
-                message = 'Sistema funcionando normalmente'
-            
-            return {
-                'status': status,
-                'message': message,
-                'issues': issues,
-                'warnings': warnings,
-                'metrics': current,
-                'monitoring_active': self.monitoring_enabled,
-                'last_update': current.get('timestamp')
+            summary = {
+                'period_hours': hours,
+                'sample_count': len(metrics_list),
+                'cpu': {
+                    'avg': sum(cpu_values) / len(cpu_values),
+                    'min': min(cpu_values),
+                    'max': max(cpu_values),
+                    'current': cpu_values[-1] if cpu_values else 0
+                },
+                'memory': {
+                    'avg': sum(memory_values) / len(memory_values),
+                    'min': min(memory_values),
+                    'max': max(memory_values),
+                    'current': memory_values[-1] if memory_values else 0
+                },
+                'disk': {
+                    'avg': sum(disk_values) / len(disk_values),
+                    'min': min(disk_values),
+                    'max': max(disk_values),
+                    'current': disk_values[-1] if disk_values else 0
+                },
+                'emulator_activity': self._analyze_emulator_activity(metrics_list),
+                'alerts_count': len([a for a in self._alerts 
+                                   if a.timestamp >= datetime.now() - timedelta(hours=hours)])
             }
+            
+            return summary
             
         except Exception as e:
-            self.logger.error(f"Erro ao obter status de saúde: {e}")
-            return {
-                'status': 'error',
-                'message': f'Erro ao verificar saúde do sistema: {str(e)}'
-            }
-
-    def check_alerts(self) -> List[Dict[str, Any]]:
-        """Verifica alertas baseados nas métricas atuais.
+            self.logger.error(f"Erro ao gerar resumo de performance: {e}")
+            return {}
+    
+    def get_active_alerts(self) -> List[PerformanceAlert]:
+        """Obtém alertas ativos (não reconhecidos).
         
         Returns:
             Lista de alertas ativos
         """
+        return [alert for alert in self._alerts if not alert.acknowledged]
+    
+    def acknowledge_alert(self, alert_index: int) -> bool:
+        """Reconhece um alerta.
+        
+        Args:
+            alert_index: Índice do alerta na lista
+            
+        Returns:
+            True se reconheceu com sucesso
+        """
         try:
-            current_metrics = self.get_current_metrics()
-            if not current_metrics:
-                return []
+            if 0 <= alert_index < len(self._alerts):
+                self._alerts[alert_index].acknowledged = True
+                self.logger.info(f"Alerta {alert_index} reconhecido")
+                return True
+            else:
+                self.logger.warning(f"Índice de alerta inválido: {alert_index}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Erro ao reconhecer alerta: {e}")
+            return False
+    
+    def add_alert_callback(self, callback: Callable[[PerformanceAlert], None]) -> None:
+        """Adiciona callback para notificação de alertas.
+        
+        Args:
+            callback: Função a ser chamada quando houver novo alerta
+        """
+        self._alert_callbacks.append(callback)
+    
+    def export_metrics(self, file_path: str, hours: int = 24) -> bool:
+        """Exporta métricas para arquivo JSON.
+        
+        Args:
+            file_path: Caminho do arquivo de destino
+            hours: Período para exportação em horas
             
-            alerts = []
+        Returns:
+            True se exportou com sucesso
+        """
+        try:
+            metrics_list = self.get_metrics_history(hours)
             
-            # CPU alert
-            cpu_usage = current_metrics.get('cpu_usage', 0)
-            if cpu_usage > self.cpu_alert_threshold:
-                alerts.append({
-                    'type': 'cpu',
-                    'severity': 'warning' if cpu_usage < 95 else 'critical',
-                    'message': f'Alto uso de CPU: {cpu_usage:.1f}%',
-                    'value': cpu_usage,
-                    'threshold': self.cpu_alert_threshold
-                })
+            export_data = {
+                'export_timestamp': datetime.now().isoformat(),
+                'period_hours': hours,
+                'metrics_count': len(metrics_list),
+                'metrics': [m.to_dict() for m in metrics_list],
+                'summary': self.get_performance_summary(hours)
+            }
             
-            # Memory alert
-            memory_usage = current_metrics.get('memory_usage', 0)
-            if memory_usage > self.memory_alert_threshold:
-                alerts.append({
-                    'type': 'memory',
-                    'severity': 'warning' if memory_usage < 95 else 'critical',
-                    'message': f'Alto uso de memória: {memory_usage:.1f}%',
-                    'value': memory_usage,
-                    'threshold': self.memory_alert_threshold
-                })
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
             
-            # Disk alerts
-            disk_usage = current_metrics.get('disk_usage', {})
-            for drive, usage_info in disk_usage.items():
-                if isinstance(usage_info, dict):
-                    usage_percent = usage_info.get('usage_percent', 0)
-                    if usage_percent > self.disk_alert_threshold:
-                        alerts.append({
-                            'type': 'disk',
-                            'severity': 'warning' if usage_percent < 98 else 'critical',
-                            'message': f'Alto uso do disco {drive}: {usage_percent:.1f}%',
-                            'value': usage_percent,
-                            'threshold': self.disk_alert_threshold,
-                            'drive': drive
-                        })
+            self.logger.info(f"Métricas exportadas para {file_path}")
+            return True
             
-            return alerts
+        except Exception as e:
+            self.logger.error(f"Erro ao exportar métricas: {e}")
+            return False
+    
+    def _check_psutil_availability(self) -> bool:
+        """Verifica se psutil está disponível e funcionando."""
+        try:
+            psutil.cpu_percent()
+            psutil.virtual_memory()
+            psutil.disk_usage('/')
+            return True
+        except Exception as e:
+            self.logger.error(f"psutil não está funcionando: {e}")
+            return False
+    
+    def _collect_metrics(self) -> Optional[SystemMetrics]:
+        """Coleta métricas atuais do sistema."""
+        try:
+            metrics = SystemMetrics()
+            
+            # CPU
+            metrics.cpu_percent = psutil.cpu_percent(interval=1)
+            metrics.cpu_count = psutil.cpu_count()
+            
+            cpu_freq = psutil.cpu_freq()
+            if cpu_freq:
+                metrics.cpu_freq = cpu_freq.current
+            
+            # Temperatura da CPU (se disponível)
+            try:
+                temps = psutil.sensors_temperatures()
+                if temps:
+                    for name, entries in temps.items():
+                        if 'cpu' in name.lower() or 'core' in name.lower():
+                            if entries:
+                                metrics.cpu_temp = entries[0].current
+                                break
+            except:
+                pass
+            
+            # Memória
+            memory = psutil.virtual_memory()
+            metrics.memory_total = memory.total
+            metrics.memory_used = memory.used
+            metrics.memory_percent = memory.percent
+            metrics.memory_available = memory.available
+            
+            # Disco (drive principal)
+            try:
+                disk = psutil.disk_usage('/')
+                metrics.disk_total = disk.total
+                metrics.disk_used = disk.used
+                metrics.disk_percent = (disk.used / disk.total) * 100
+                metrics.disk_free = disk.free
+            except:
+                # Fallback para Windows
+                try:
+                    disk = psutil.disk_usage('C:')
+                    metrics.disk_total = disk.total
+                    metrics.disk_used = disk.used
+                    metrics.disk_percent = (disk.used / disk.total) * 100
+                    metrics.disk_free = disk.free
+                except:
+                    pass
+            
+            # I/O de disco
+            current_time = time.time()
+            disk_io = psutil.disk_io_counters()
+            
+            if disk_io and self._last_disk_io and self._last_measurement_time:
+                time_diff = current_time - self._last_measurement_time
+                if time_diff > 0:
+                    read_diff = disk_io.read_bytes - self._last_disk_io.read_bytes
+                    write_diff = disk_io.write_bytes - self._last_disk_io.write_bytes
+                    
+                    metrics.disk_read_speed = read_diff / time_diff
+                    metrics.disk_write_speed = write_diff / time_diff
+            
+            self._last_disk_io = disk_io
+            
+            # Rede
+            network_io = psutil.net_io_counters()
+            if network_io:
+                metrics.network_sent = network_io.bytes_sent
+                metrics.network_recv = network_io.bytes_recv
+                
+                if self._last_network_io and self._last_measurement_time:
+                    time_diff = current_time - self._last_measurement_time
+                    if time_diff > 0:
+                        sent_diff = network_io.bytes_sent - self._last_network_io.bytes_sent
+                        recv_diff = network_io.bytes_recv - self._last_network_io.bytes_recv
+                        
+                        metrics.network_sent_speed = sent_diff / time_diff
+                        metrics.network_recv_speed = recv_diff / time_diff
+                
+                self._last_network_io = network_io
+            
+            self._last_measurement_time = current_time
+            
+            # GPU (se disponível)
+            if self.enable_gpu_monitoring:
+                self._collect_gpu_metrics(metrics)
+            
+            # Processos
+            metrics.process_count = len(psutil.pids())
+            metrics.emulator_processes = self._get_emulator_processes()
+            
+            return metrics
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao coletar métricas: {e}")
+            return None
+    
+    def _collect_gpu_metrics(self, metrics: SystemMetrics) -> None:
+        """Coleta métricas da GPU se disponível."""
+        try:
+            # Tentar usar nvidia-ml-py se disponível
+            try:
+                import pynvml
+                pynvml.nvmlInit()
+                
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                
+                # Utilização da GPU
+                util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+                metrics.gpu_percent = util.gpu
+                
+                # Memória da GPU
+                mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                metrics.gpu_memory_total = mem_info.total
+                metrics.gpu_memory_used = mem_info.used
+                
+                # Temperatura da GPU
+                temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                metrics.gpu_temp = temp
+                
+            except ImportError:
+                # pynvml não disponível
+                pass
+            except Exception:
+                # Erro ao acessar GPU NVIDIA
+                pass
+                
+        except Exception as e:
+            self.logger.debug(f"Não foi possível coletar métricas da GPU: {e}")
+    
+    def _get_emulator_processes(self) -> List[Dict[str, Any]]:
+        """Obtém lista de processos de emuladores ativos."""
+        emulator_procs = []
+        
+        try:
+            for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+                try:
+                    proc_name = proc.info['name'].lower()
+                    
+                    for emulator in self.emulator_processes:
+                        if emulator in proc_name:
+                            emulator_procs.append({
+                                'pid': proc.info['pid'],
+                                'name': proc.info['name'],
+                                'emulator': emulator,
+                                'cpu_percent': proc.info['cpu_percent'] or 0,
+                                'memory_percent': proc.info['memory_percent'] or 0
+                            })
+                            break
+                            
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+                    
+        except Exception as e:
+            self.logger.debug(f"Erro ao obter processos de emuladores: {e}")
+        
+        return emulator_procs
+    
+    def _monitoring_loop(self) -> None:
+        """Loop principal de monitoramento."""
+        self.logger.info("Loop de monitoramento iniciado")
+        
+        while not self._stop_event.is_set():
+            try:
+                # Coletar métricas
+                metrics = self._collect_metrics()
+                
+                if metrics:
+                    # Adicionar ao histórico
+                    with self._metrics_lock:
+                        self._metrics_history.append(metrics)
+                        
+                        # Limitar tamanho do histórico
+                        if len(self._metrics_history) > self.max_history_size:
+                            self._metrics_history = self._metrics_history[-self.max_history_size:]
+                    
+                    # Verificar alertas
+                    self._check_alerts(metrics)
+                
+                # Aguardar próximo ciclo
+                self._stop_event.wait(self.monitoring_interval)
+                
+            except Exception as e:
+                self.logger.error(f"Erro no loop de monitoramento: {e}")
+                self._stop_event.wait(self.monitoring_interval)
+        
+        self.logger.info("Loop de monitoramento finalizado")
+    
+    def _check_alerts(self, metrics: SystemMetrics) -> None:
+        """Verifica se métricas excedem limites e gera alertas."""
+        try:
+            # CPU
+            if metrics.cpu_percent >= self.cpu_critical_threshold:
+                self._create_alert(
+                    "cpu", f"CPU crítica: {metrics.cpu_percent:.1f}%", "critical",
+                    self.cpu_critical_threshold, metrics.cpu_percent
+                )
+            elif metrics.cpu_percent >= self.cpu_warning_threshold:
+                self._create_alert(
+                    "cpu", f"CPU alta: {metrics.cpu_percent:.1f}%", "warning",
+                    self.cpu_warning_threshold, metrics.cpu_percent
+                )
+            
+            # Memória
+            if metrics.memory_percent >= self.memory_critical_threshold:
+                self._create_alert(
+                    "memory", f"Memória crítica: {metrics.memory_percent:.1f}%", "critical",
+                    self.memory_critical_threshold, metrics.memory_percent
+                )
+            elif metrics.memory_percent >= self.memory_warning_threshold:
+                self._create_alert(
+                    "memory", f"Memória alta: {metrics.memory_percent:.1f}%", "warning",
+                    self.memory_warning_threshold, metrics.memory_percent
+                )
+            
+            # Disco
+            if metrics.disk_percent >= self.disk_critical_threshold:
+                self._create_alert(
+                    "disk", f"Disco crítico: {metrics.disk_percent:.1f}%", "critical",
+                    self.disk_critical_threshold, metrics.disk_percent
+                )
+            elif metrics.disk_percent >= self.disk_warning_threshold:
+                self._create_alert(
+                    "disk", f"Disco cheio: {metrics.disk_percent:.1f}%", "warning",
+                    self.disk_warning_threshold, metrics.disk_percent
+                )
+            
+            # Temperatura
+            if metrics.cpu_temp > 0:
+                if metrics.cpu_temp >= self.temp_critical_threshold:
+                    self._create_alert(
+                        "temperature", f"Temperatura crítica: {metrics.cpu_temp:.1f}°C", "critical",
+                        self.temp_critical_threshold, metrics.cpu_temp
+                    )
+                elif metrics.cpu_temp >= self.temp_warning_threshold:
+                    self._create_alert(
+                        "temperature", f"Temperatura alta: {metrics.cpu_temp:.1f}°C", "warning",
+                        self.temp_warning_threshold, metrics.cpu_temp
+                    )
             
         except Exception as e:
             self.logger.error(f"Erro ao verificar alertas: {e}")
-            return []
+    
+    def _create_alert(self, alert_type: str, message: str, severity: str,
+                     threshold: float, current_value: float) -> None:
+        """Cria novo alerta se não existir similar recente."""
+        try:
+            # Verificar se já existe alerta similar nos últimos 5 minutos
+            cutoff_time = datetime.now() - timedelta(minutes=5)
+            recent_alerts = [a for a in self._alerts 
+                           if a.alert_type == alert_type and a.timestamp >= cutoff_time]
+            
+            if recent_alerts:
+                return  # Não criar alerta duplicado
+            
+            # Criar novo alerta
+            alert = PerformanceAlert(alert_type, message, severity, threshold, current_value)
+            self._alerts.append(alert)
+            
+            # Limitar número de alertas
+            if len(self._alerts) > 100:
+                self._alerts = self._alerts[-100:]
+            
+            # Notificar callbacks
+            for callback in self._alert_callbacks:
+                try:
+                    callback(alert)
+                except Exception as e:
+                    self.logger.error(f"Erro em callback de alerta: {e}")
+            
+            self.logger.warning(f"Alerta criado: {message}")
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao criar alerta: {e}")
+    
+    def _analyze_emulator_activity(self, metrics_list: List[SystemMetrics]) -> Dict[str, Any]:
+        """Analisa atividade de emuladores no período."""
+        try:
+            if not metrics_list:
+                return {}
+            
+            emulator_stats = {}
+            total_samples = len(metrics_list)
+            
+            for metrics in metrics_list:
+                for proc in metrics.emulator_processes:
+                    emulator = proc['emulator']
+                    
+                    if emulator not in emulator_stats:
+                        emulator_stats[emulator] = {
+                            'active_samples': 0,
+                            'total_cpu': 0.0,
+                            'total_memory': 0.0,
+                            'max_cpu': 0.0,
+                            'max_memory': 0.0
+                        }
+                    
+                    stats = emulator_stats[emulator]
+                    stats['active_samples'] += 1
+                    stats['total_cpu'] += proc['cpu_percent']
+                    stats['total_memory'] += proc['memory_percent']
+                    stats['max_cpu'] = max(stats['max_cpu'], proc['cpu_percent'])
+                    stats['max_memory'] = max(stats['max_memory'], proc['memory_percent'])
+            
+            # Calcular médias e percentuais de atividade
+            for emulator, stats in emulator_stats.items():
+                if stats['active_samples'] > 0:
+                    stats['avg_cpu'] = stats['total_cpu'] / stats['active_samples']
+                    stats['avg_memory'] = stats['total_memory'] / stats['active_samples']
+                    stats['activity_percent'] = (stats['active_samples'] / total_samples) * 100
+                else:
+                    stats['avg_cpu'] = 0.0
+                    stats['avg_memory'] = 0.0
+                    stats['activity_percent'] = 0.0
+            
+            return emulator_stats
+            
+        except Exception as e:
+            self.logger.error(f"Erro ao analisar atividade de emuladores: {e}")
+            return {}
